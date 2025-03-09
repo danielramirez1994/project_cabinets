@@ -6,6 +6,8 @@ import json
 import os
 from dibujar_gabinete import dibujar_gabinete
 from tkinter import TclError
+import uuid
+
 
 # Variables para las dimensiones de Canvas
 Canvas_width = 800
@@ -144,7 +146,6 @@ class EstiloUnaGavetaDosPuertas(EstiloGabinete):
                 
         return piezas
 
-
 class EstiloTresGavetas(EstiloGabinete):
     """Estilo de tres gavetas"""
     def __init__(self):
@@ -169,26 +170,16 @@ class EstiloTresGavetas(EstiloGabinete):
         rows = 2
         dia = 0.25
         
-        # Calcular altura de cada gaveta
-        altura_disponible = gabinete["Alto"] - toe_kick - (2 * espacio_entre_gavetas)
+        cantidad_gavetas = gabinete.get("num_gavetas", 1)
+        altura_disponible = gabinete["Alto"] - toe_kick - ((cantidad_gavetas - 1) * espacio_entre_gavetas)
         
-        # Usar el valor de los atributos de altura si están disponibles
-        high_drawer_top = gabinete.get("high_drawer_top", self.high_drawer_top)
-
-        
-        # Si las alturas de las gavetas media e inferior ya están definidas, usarlas
-        high_drawer_middle = gabinete.get("high_drawer_middle")
-        high_drawer_bottom = gabinete.get("high_drawer_bottom")
-
-        if high_drawer_middle is None or high_drawer_bottom is None:
-            espacio_restante = altura_disponible - high_drawer_top
-            high_drawer_middle = espacio_restante / 2
-            high_drawer_bottom = espacio_restante / 2
-
-            
-            # Guardar los valores calculados
-            self.high_drawer_middle = high_drawer_middle
-            self.high_drawer_bottom = high_drawer_bottom
+        alturas_gavetas = []
+        for i in range(cantidad_gavetas):
+            key = f"high_drawer_{i}"
+            if key in gabinete:
+                alturas_gavetas.append(gabinete[key])
+            else:
+                alturas_gavetas.append(altura_disponible / cantidad_gavetas)
         
         piezas = [
             {"nombre": "Lateral Izquierdo", "ancho": gabinete["Profundidad"] -1, "alto": gabinete["Alto"],
@@ -197,15 +188,16 @@ class EstiloTresGavetas(EstiloGabinete):
              "orificios_shelf": {"cantidad": total, "diametro": dia, "filas": rows, "distancia_frontal": front, "distancia_trasera": rear, "separacion": space, "distancia_inferior": botton, "distancia_superior": top}},
             {"nombre": "Base", "ancho": gabinete["Ancho"] - 2 * gabinete["Espesor"], "alto": gabinete["Profundidad"] -1},
             {"nombre": "Trasera", "ancho": gabinete["Ancho"], "alto": gabinete["Alto"] - gabinete["Espesor"]},
-            {"nombre": "Drawer Face Superior", "ancho": gabinete["Ancho"] - gap, "alto": high_drawer_top},
-            {"nombre": "Drawer Face Media", "ancho": gabinete["Ancho"] - gap, "alto": high_drawer_middle},
-            {"nombre": "Drawer Face Inferior", "ancho": gabinete["Ancho"] - gap, "alto": high_drawer_bottom},
             {"nombre": "Under Drawer Rail Superior", "ancho": gabinete["Ancho"] - 2 * gabinete["Espesor"], "alto": 3},
             {"nombre": "Upper Drawer Rail Superior", "ancho": gabinete["Ancho"] - 2 * gabinete["Espesor"], "alto": 3},
             {"nombre": "Rear Drawer Rail Superior", "ancho": gabinete["Ancho"] - 2 * gabinete["Espesor"], "alto": 3},
             {"nombre": "Under Drawer Rail Media", "ancho": gabinete["Ancho"] - 2 * gabinete["Espesor"], "alto": 3},
             {"nombre": "Toe Kick", "ancho": gabinete["Ancho"], "alto": toe_kick},
         ]
+        
+        # Agregar las gavetas dinámicamente
+        for i, altura_gaveta in enumerate(alturas_gavetas):
+            piezas.append({"nombre": f"Drawer Face {i+1}", "ancho": gabinete["Ancho"] - gap, "alto": altura_gaveta})
         
         # Determinar profundidad para las cajas de gavetas
         profundidad_box_drawer = 21
@@ -223,26 +215,15 @@ class EstiloTresGavetas(EstiloGabinete):
             profundidad_box_drawer = 9
             
             
-        if high_drawer_top < 8:
-            restar1 = 1.875
-        else:
-            restar1 = 2.75
-            
-        if high_drawer_middle < 8:
-            restar2 = 1.875
-        else:
-            restar2 = 2.75
-            
-        if high_drawer_bottom < 8:
-            restar3 = 1.875
-        else:
-            restar3 = 2.75
-        
-        # Añadir las cajas de gavetas
-        piezas.append({"nombre": "Box Drawer Superior", "ancho": gabinete["Ancho"] - drawer_mount - (gabinete["Espesor"] * 2), "alto": high_drawer_top - restar1, "profundidad": profundidad_box_drawer})
-        piezas.append({"nombre": "Box Drawer Media", "ancho": gabinete["Ancho"] - drawer_mount - (gabinete["Espesor"] * 2), "alto": high_drawer_middle - restar2, "profundidad": profundidad_box_drawer})
-        piezas.append({"nombre": "Box Drawer Inferior", "ancho": gabinete["Ancho"] - drawer_mount - (gabinete["Espesor"] * 2), "alto": high_drawer_bottom - restar3, "profundidad": profundidad_box_drawer})
-        
+        # Agregar las cajas de gavetas dinámicamente
+        for i, _ in enumerate(alturas_gavetas):
+            piezas.append({
+                "nombre": f"Box Drawer {i+1}",
+                "ancho": gabinete["Ancho"] - drawer_mount - (gabinete["Espesor"] * 2),
+                "alto": 4,
+                "profundidad": profundidad_box_drawer
+            })
+                
         return piezas
     
 class GestorGabinetes:
@@ -812,13 +793,6 @@ class GabineteApp:
         lbl_espacio_restante = ttk.Label(frame_info, textvariable=var_espacio_restante)
         lbl_espacio_restante.pack(anchor=tk.W, pady=2)
         
-        # Etiquetas de ayuda
-        ttk.Label(frame_gavetas, text="Edite los valores de cualquier gaveta. Los campos que no modifique se ajustarán automáticamente.", 
-                wraplength=420, font=("", 8)).pack(pady=5)
-        
-        ttk.Label(frame_gavetas, text="Presione Enter después de ingresar un valor para actualizar los cálculos", 
-                wraplength=420, font=("", 8), foreground="blue").pack(pady=5)
-        
         # Frame para advertencias
         frame_advertencia = ttk.Frame(frame_gavetas)
         frame_advertencia.pack(fill=tk.X, pady=5)
@@ -992,32 +966,17 @@ class GabineteApp:
                     # Usar nueva nomenclatura para almacenar gavetas
                     gabinete[f"high_drawer_{i}"] = altura
                     
-                    # Para mantener compatibilidad con código antiguo
-                    if i == 0 and cantidad_gavetas >= 1:
-                        gabinete["high_drawer_top"] = altura
-                    elif i == 1 and cantidad_gavetas >= 2:
-                        gabinete["high_drawer_middle"] = altura
-                    elif i == 2 and cantidad_gavetas >= 3:
-                        gabinete["high_drawer_bottom"] = altura
-                
-                # Para Base_1_Gav, guardar configuración de puertas
-                if estilo_nuevo == "Base_1_Gav":
-                    gabinete["dos_puertas"] = var_tiene_dos_puertas.get()
-                    gabinete["altura_puerta"] = var_altura_puerta.get()
-                    
-                    # Calcular espacio usado por gavetas
-                    espacios_entre_gavetas = (cantidad_gavetas - 1) * ESPACIO_ENTRE_GAVETAS
-                    altura_disponible_total = alto_nuevo - TOE_KICK - ESPACIO_SUPERIOR_GAVETA
-                    
-                    # Obtener espacio usado por gavetas
-                    espacio_gavetas = sum(float(gavetas_entries[i].get()) for i in range(cantidad_gavetas)) + espacios_entre_gavetas
-                    
-                    # Guardar porcentaje usado por gavetas para futura referencia
-                    if altura_disponible_total > 0:
-                        gabinete["porcentaje_gavetas"] = espacio_gavetas / altura_disponible_total
-                
+                # Actualizar en la vista
+                for item_id in self.tree_gabinetes.selection():
+                    valores = list(self.tree_gabinetes.item(item_id)["values"])
+                    valores[1] = gabinete["Ancho"]
+                    valores[2] = gabinete["Alto"]
+                    valores[3] = gabinete["Profundidad"]
+                    valores[4] = self.gestor_gabinetes.obtener_nombres_estilos()[estilo_nuevo]
+                    valores[5] = gabinete["Cantidad"]
+                    self.tree_gabinetes.item(item_id, values=valores)
+                 
                 # Recalcular piezas y actualizar la vista
-                gabinete["piezas"] = self.gestor_gabinetes.calcular_piezas(gabinete)
                 self.mostrar_piezas(None)
                 self.autoguardar_datos()
                 
@@ -1076,7 +1035,7 @@ class GabineteApp:
         selected_key = self.estilo_keys[selected_index]
         selected_value = self.estilo_values[selected_index]
 
-        gabinete_id = len(self.gabinetes) + 1
+        gabinete_id = str(uuid.uuid4())
         self.gabinetes.append({
             "ID": gabinete_id,
             "Ancho": ancho,
@@ -1296,6 +1255,12 @@ class GabineteApp:
             print(f"Error al autoguardar: {str(e)}")
             return False
     
+    def validar_datos(self, datos):
+        for dato in datos:
+            if dato is None or (isinstance(dato, (int, float)) and dato < 0):
+                return False
+        return True
+    
     def guardar_datos(self):
         """Guarda los datos en un archivo seleccionado por el usuario"""
         # Crea una lista para almacenar los gabinetes y sus piezas
@@ -1444,9 +1409,12 @@ class GabineteApp:
         
         # Guardar el archivo temporal vacío
         try:
-            with open(self.archivo_temp, "w") as archivo:
-                json.dump([], archivo)
-            print("Se ha limpiado la tabla y el archivo temporal")
+            if not self.validar_datos(self.gabinetes):
+                messagebox.showerror("Error", "Datos inválidos encontrados. No se puede guardar.")
+                return
+                with open(self.archivo_temp, "w") as archivo:
+                    json.dump([], archivo)
+                print("Se ha limpiado la tabla y el archivo temporal")
         except Exception as e:
             print(f"Error al limpiar archivo temporal: {str(e)}")
         
